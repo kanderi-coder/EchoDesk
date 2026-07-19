@@ -1,3 +1,6 @@
+from internet.internet import InternetEngine
+
+
 class KnowledgeEngine:
 
     def __init__(self):
@@ -20,8 +23,17 @@ class KnowledgeEngine:
                 "I am EchoDesk, your personal desktop AI assistant."
         }
 
+        self.internet_engine = InternetEngine()
+
     def search(self, question):
 
         question = question.lower().strip()
 
-        return self.facts.get(question, None)
+        if not question:
+            return None
+
+        local_answer = self.facts.get(question)
+        if local_answer is not None:
+            return local_answer
+
+        return self.internet_engine.search(question)
