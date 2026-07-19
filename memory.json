@@ -139,6 +139,21 @@
             "time": "2026-07-19 17:31:29.318940",
             "user": "What is my favorite color?",
             "EchoDesk": "I could not find a useful answer from the web."
+        },
+        {
+            "time": "2026-07-19 17:45:16.654569",
+            "user": "open notepad",
+            "EchoDesk": "Opened application or command: notepad."
+        },
+        {
+            "time": "2026-07-19 17:45:18.051976",
+            "user": "open https://github.com",
+            "EchoDesk": "Opened website: https://github.com."
+        },
+        {
+            "time": "2026-07-19 17:45:18.791544",
+            "user": "type Hello EchoDesk",
+            "EchoDesk": "Typed text: hello echodesk."
         }
     ],
     "facts": [

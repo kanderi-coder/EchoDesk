@@ -1,4 +1,5 @@
 from internet.internet import InternetEngine
+from automation.automation import AutomationEngine
 
 
 from memory_engine.memory_engine import MemoryEngine
@@ -27,7 +28,7 @@ class KnowledgeEngine:
         }
 
         self.memory_engine = MemoryEngine()
-
+        self.automation_engine = AutomationEngine()
         self.internet_engine = InternetEngine()
 
     def search(self, question):
@@ -40,6 +41,10 @@ class KnowledgeEngine:
         memory_answer = self.memory_engine.process_command(question)
         if memory_answer is not None:
             return memory_answer
+
+        automation_result = self.automation_engine.process_command(question)
+        if automation_result is not None:
+            return automation_result.get("message")
 
         local_answer = self.facts.get(question)
         if local_answer is not None:

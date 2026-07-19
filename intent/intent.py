@@ -1,6 +1,7 @@
 
 
 
+from automation.automation import AutomationEngine
 from memory_engine.memory_engine import MemoryEngine
 
 
@@ -120,6 +121,7 @@ class TaskExecutor:
     def __init__(self, intent_engine=None):
         self.intent_engine = intent_engine or IntentEngine()
         self.memory_engine = MemoryEngine()
+        self.automation_engine = AutomationEngine()
 
     def execute(self, command):
         normalized = command.lower().strip() if command else ""
@@ -135,6 +137,9 @@ class TaskExecutor:
 
         if self._is_vision_request(normalized):
             return "vision"
+
+        if self.automation_engine.is_automation_command(command):
+            return "knowledge"
 
         if self.memory_engine.is_memory_command(command):
             return "knowledge"
