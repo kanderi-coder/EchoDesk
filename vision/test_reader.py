@@ -1,8 +1,10 @@
 from capture import ScreenCapture
 from reader import ScreenReader
+from analyzer import ScreenAnalyzer
 
 
 def main():
+
     print("Capturing screen...")
 
     capture = ScreenCapture()
@@ -13,11 +15,15 @@ def main():
     reader = ScreenReader()
     text = reader.read_image(image_path)
 
-    print("\n========================")
-    print("SCREEN CONTENT")
-    print("========================\n")
+    analyzer = ScreenAnalyzer()
 
-    print(text)
+    summary = analyzer.analyze(text)
+
+    print("\n==============================")
+    print("ECHODESK VISION REPORT")
+    print("==============================\n")
+
+    print(summary)
 
 
 if __name__ == "__main__":

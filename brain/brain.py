@@ -1,58 +1,96 @@
 import datetime
+
+from brain.router import Router
 from memory.memory import Memory
+from vision.capture import ScreenCapture
+from vision.reader import ScreenReader
+from vision.analyzer import ScreenAnalyzer
+from knowledge.knowledge import KnowledgeEngine
 
 
 class EchoBrain:
 
     def __init__(self):
 
-        self.name = "EchoDesk"
+        self.router = Router()
         self.memory = Memory()
 
+        # Lazy-loaded modules
+        self.capture = None
+        self.reader = None
+        self.analyzer = None
+
+        self.knowledge = KnowledgeEngine()
+
+    def load_vision(self):
+
+        if self.capture is None:
+
+            print("Loading Vision Engine...")
+
+            self.capture = ScreenCapture()
+            self.reader = ScreenReader()
+            self.analyzer = ScreenAnalyzer()
 
     def process(self, command):
 
-        command = command.lower().strip()
+        intent = self.router.route(command)
 
-
-        if "history" in command:
-
-            history = self.memory.recall()
-
-            response = f"I remember {len(history)} conversations."
-
-
-        elif command in ["hello", "hi", "hey"]:
+        if intent == "greeting":
 
             response = "Hello! I am EchoDesk. How can I help you?"
 
-
-        elif "time" in command:
+        elif intent == "time":
 
             now = datetime.datetime.now()
 
             response = f"The current time is {now.strftime('%H:%M:%S')}"
 
+        elif intent == "history":
 
-        elif "who are you" in command:
+            history = self.memory.recall()
 
-            response = "I am EchoDesk, your personal desktop assistant."
+            response = f"I remember {len(history)} conversations."
 
+        elif intent == "screenshot":
 
-        elif "screenshot" in command:
+            self.load_vision()
 
-            response = "Opening my vision system."
+            image = self.capture.take_screenshot()
 
+            response = f"Screenshot saved to {image}"
+
+        elif intent == "vision":
+
+            self.load_vision()
+
+            image = self.capture.take_screenshot()
+
+            text = self.reader.read_image(image)
+
+            response = self.analyzer.analyze(text)
+
+        elif intent == "knowledge":
+
+            answer = self.knowledge.search(command)
+
+            if answer:
+
+                response = answer
+
+            else:
+
+                response = (
+                    "I don't know that yet. "
+                    "Soon I'll be able to search AI or the web."
+                )
 
         else:
 
-            response = "I am still learning that command."
+            response = (
+                "I don't understand that request yet."
+            )
 
-
-        self.memory.remember(
-            command,
-            response
-        )
-
+        self.memory.remember(command, response)
 
         return response
