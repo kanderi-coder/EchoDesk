@@ -44,6 +44,16 @@ class IntentEngine:
         "browse",
         "internet",
         "web",
+        "news",
+        "weather",
+        "forecast",
+        "capital",
+        "define",
+        "information",
+        "info",
+        "latest",
+        "stock",
+        "price",
     )
 
     MEMORY_CUES = (

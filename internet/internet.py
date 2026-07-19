@@ -1,77 +1,68 @@
 import json
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
+from typing import List, Optional, Protocol
 from urllib.error import HTTPError, URLError
 
 
-class InternetEngine:
-    """A minimal internet search engine for EchoDesk.
+@dataclass
+class SearchResult:
+    """Structured provider search result."""
 
-    InternetEngine performs a concise web search using a public search
-    endpoint and returns human-readable summaries. It is independent,
-    reusable, and built to fail gracefully when the network or service is
-    unavailable.
-    """
+    success: bool
+    summary: Optional[str] = None
+    error: Optional[str] = None
+
+
+class SearchProvider(Protocol):
+    """Provider abstraction for internet search services."""
+
+    def search(self, query: str, timeout: float) -> SearchResult:
+        """Perform a search and return a SearchResult."""
+        ...
+
+
+class DuckDuckGoProvider:
+    """DuckDuckGo provider using the Instant Answer JSON API."""
 
     API_URL = "https://api.duckduckgo.com/"
+    USER_AGENT = "EchoDesk InternetEngine/1.0"
 
-    def __init__(self, timeout: float = 5.0):
-        """Initialize the internet engine.
-
-        Args:
-            timeout: The maximum number of seconds to wait for a remote
-                response.
-        """
-        self.timeout = float(timeout)
-
-    def search(self, query: str) -> str | None:
-        """Search the internet for a concise summary.
-
-        Args:
-            query: The query text to search.
-
-        Returns:
-            A human-readable summary string when a valid response is
-            available, or None when the query is empty or no useful result
-            could be obtained.
-        """
+    def search(self, query: str, timeout: float) -> SearchResult:
         if not isinstance(query, str) or not query.strip():
-            return None
+            return SearchResult(False, error="The search query was empty.")
 
         url = self._build_url(query)
 
         try:
             request = urllib.request.Request(
                 url,
-                headers={"User-Agent": "EchoDesk InternetEngine/1.0"},
+                headers={"User-Agent": self.USER_AGENT},
             )
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 if response.status != 200:
-                    return self._format_error(
-                        "The search service returned an unexpected status code."
+                    return SearchResult(
+                        False,
+                        error=f"Search provider returned status {response.status}.",
                     )
 
                 payload = response.read()
                 data = json.loads(payload.decode("utf-8", errors="ignore"))
-
         except HTTPError:
-            return self._format_error(
-                "The search service could not complete the request."
-            )
+            return SearchResult(False, error="The search provider could not complete the request.")
         except URLError:
-            return self._format_error(
-                "I could not reach the internet. Please check your connection."
-            )
+            return SearchResult(False, error="I could not reach the internet. Please check your connection.")
         except json.JSONDecodeError:
-            return self._format_error(
-                "The search service returned an invalid response."
-            )
-        except ValueError:
-            return self._format_error(
-                "The search service responded with corrupt data."
-            )
+            return SearchResult(False, error="The search provider returned invalid data.")
+        except Exception:
+            return SearchResult(False, error="The search provider failed unexpectedly.")
 
-        return self._summarize_result(data)
+        summary = self._summarize_result(data)
+        if summary:
+            return SearchResult(True, summary=summary)
+
+        return SearchResult(False, error="The search provider returned no useful results.")
 
     def _build_url(self, query: str) -> str:
         params = {
@@ -82,77 +73,88 @@ class InternetEngine:
         }
         return f"{self.API_URL}?{urllib.parse.urlencode(params)}"
 
-    def _summarize_result(self, data: dict) -> str | None:
+    def _summarize_result(self, data: dict) -> Optional[str]:
         if not isinstance(data, dict):
-            return self._format_error(
-                "The search service returned an unexpected format."
-            )
+            return None
 
-        answer = self._extract_field(data, "Answer")
+        answer = self._extract_string(data, "Answer")
         if answer:
-            return self._summarize_text(answer)
+            return self._clean(answer)
 
-        abstract = self._extract_field(data, "AbstractText")
+        abstract = self._extract_string(data, "AbstractText")
         if abstract:
-            return self._summarize_text(abstract)
+            return self._clean(abstract)
 
         related = self._extract_related_topics(data)
         if related:
-            return self._summarize_text(related)
+            return related
 
-        if self._extract_field(data, "Redirect"):
+        if self._extract_string(data, "Redirect"):
             return "I found a related result but could not summarize it cleanly."
 
-        return self._format_error("I could not find a useful answer from the web.")
-
-    def _extract_field(self, data: dict, key: str) -> str | None:
-        value = data.get(key)
-        if isinstance(value, str) and value.strip():
-            return value
         return None
 
-    def _extract_related_topics(self, data: dict) -> str | None:
+    def _extract_string(self, data: dict, key: str) -> Optional[str]:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+
+    def _extract_related_topics(self, data: dict) -> Optional[str]:
         topics = data.get("RelatedTopics")
         if not isinstance(topics, list):
             return None
 
         for item in topics:
             if isinstance(item, dict):
-                text = item.get("Text")
-                if isinstance(text, str) and text.strip():
-                    return text.strip()
+                text = self._extract_string(item, "Text")
+                if text:
+                    return self._clean(text)
 
-                topics_list = item.get("Topics")
-                if isinstance(topics_list, list):
-                    for child in topics_list:
-                        child_text = child.get("Text")
-                        if isinstance(child_text, str) and child_text.strip():
-                            return child_text.strip()
+                nested = item.get("Topics")
+                if isinstance(nested, list):
+                    for child in nested:
+                        if isinstance(child, dict):
+                            child_text = self._extract_string(child, "Text")
+                            if child_text:
+                                return self._clean(child_text)
 
         return None
 
-    def _summarize_text(self, text: str) -> str:
-        normalized = " ".join(text.split())
-        if len(normalized) <= 400:
-            return normalized
+    def _clean(self, text: str) -> str:
+        return " ".join(text.split())
 
-        sentences = normalized.split(". ")
-        summary = []
-        for sentence in sentences:
-            if not sentence:
+
+class InternetEngine:
+    """A reusable internet search engine with provider abstraction."""
+
+    FALLBACK_MESSAGE = (
+        "I couldn't find a clear answer from the internet right now. "
+        "Please try again later or ask something else."
+    )
+
+    def __init__(self, providers: Optional[List[SearchProvider]] = None, timeout: float = 5.0) -> None:
+        self.timeout = float(timeout)
+        self.providers = providers if providers is not None else [DuckDuckGoProvider()]
+
+    def search(self, query: str) -> str:
+        if not isinstance(query, str) or not query.strip():
+            return self.FALLBACK_MESSAGE
+
+        last_error: Optional[str] = None
+        for provider in self.providers:
+            try:
+                result = provider.search(query, self.timeout)
+            except Exception:
+                last_error = "A search provider failed unexpectedly."
                 continue
-            candidate = ". ".join(summary + [sentence])
-            if len(candidate) > 350:
-                break
-            summary.append(sentence)
 
-        if summary:
-            result = ". ".join(summary).strip()
-            if not result.endswith("."):
-                result = f"{result}."
-            return result
+            if result.success and result.summary:
+                return result.summary
 
-        return f"{normalized[:347].rstrip()}..."
+            last_error = result.error or last_error
 
-    def _format_error(self, message: str) -> str:
-        return message.strip()
+        if last_error:
+            return f"{self.FALLBACK_MESSAGE} {last_error}"
+
+        return self.FALLBACK_MESSAGE
