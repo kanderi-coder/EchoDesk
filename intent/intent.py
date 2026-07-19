@@ -1,6 +1,9 @@
 
 
 
+from memory_engine.memory_engine import MemoryEngine
+
+
 class IntentEngine:
 
     GREETINGS = (
@@ -46,6 +49,11 @@ class IntentEngine:
         "remember",
         "recall",
         "memory",
+        "forget",
+        "delete",
+        "remove",
+        "update",
+        "change",
     )
 
     SYSTEM_CUES = (
@@ -111,6 +119,7 @@ class TaskExecutor:
 
     def __init__(self, intent_engine=None):
         self.intent_engine = intent_engine or IntentEngine()
+        self.memory_engine = MemoryEngine()
 
     def execute(self, command):
         normalized = command.lower().strip() if command else ""
@@ -127,16 +136,16 @@ class TaskExecutor:
         if self._is_vision_request(normalized):
             return "vision"
 
+        if self.memory_engine.is_memory_command(command):
+            return "knowledge"
+
         category = self.intent_engine.classify(command)
 
         if category == "greeting":
             return "greeting"
 
-        if category in ("question", "internet"):
+        if category in ("question", "internet", "memory"):
             return "knowledge"
-
-        if category == "memory":
-            return "history"
 
         if category == "vision":
             return "vision"

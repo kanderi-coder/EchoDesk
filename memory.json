@@ -129,6 +129,24 @@
             "time": "2026-07-19 17:13:17.657083",
             "user": "latest news about AI",
             "EchoDesk": "I don't understand that request yet."
+        },
+        {
+            "time": "2026-07-19 17:31:27.338016",
+            "user": "Remember that my favorite color is blue",
+            "EchoDesk": "I will remember that your favorite color is blue."
+        },
+        {
+            "time": "2026-07-19 17:31:29.318940",
+            "user": "What is my favorite color?",
+            "EchoDesk": "I could not find a useful answer from the web."
+        }
+    ],
+    "facts": [
+        {
+            "subject": "favorite color",
+            "value": "blue",
+            "created_at": "2026-07-19T17:31:26.985192",
+            "updated_at": "2026-07-19T17:31:26.985278"
         }
     ]
 }
