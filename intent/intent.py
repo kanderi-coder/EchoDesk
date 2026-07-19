@@ -1,9 +1,9 @@
 
 
 
-from automation.automation import AutomationEngine
-from memory_engine.memory_engine import MemoryEngine
-from planner.planner import PlannerEngine
+from typing import Any
+
+from tools.manager import ToolManager
 
 
 class IntentEngine:
@@ -131,12 +131,16 @@ class TaskExecutor:
 
     def __init__(self, intent_engine=None):
         self.intent_engine = intent_engine or IntentEngine()
-        self.memory_engine = MemoryEngine()
-        self.automation_engine = AutomationEngine()
-        self.planner_engine = PlannerEngine(self.automation_engine)
+        self.tool_manager = ToolManager()
+        self.tool_manager.register_default_tools()
 
     def execute(self, command):
         normalized = command.lower().strip() if command else ""
+
+        if command:
+            self.tool_manager.execute("ContextEngine", "add_user_message", command)
+            if normalized not in ("continue", "history", "time", "screenshot"):
+                self.tool_manager.execute("ContextEngine", "set_goal", command)
 
         if normalized == "history":
             return "history"
@@ -144,16 +148,27 @@ class TaskExecutor:
         if normalized == "screenshot":
             return "screenshot"
 
+        if normalized == "continue":
+            return "knowledge"
+
         if normalized == "time" or "time" in normalized:
             return "time"
 
         if self._is_vision_request(normalized):
             return "vision"
 
-        if self.planner_engine.is_planning_command(command):
+        planner_result = self.tool_manager.execute("PlannerEngine", "plan", command)
+        if planner_result.get("success") and planner_result.get("result"):
+            plan = planner_result["result"]
+            self.tool_manager.execute("ContextEngine", "set_goal", command)
+            for step in plan.get("steps", []):
+                description = step.get("description") or step.get("action")
+                self.tool_manager.execute("ContextEngine", "add_pending_task", description)
+            self._extract_active_context(plan)
             return "knowledge"
 
-        if self.memory_engine.is_memory_command(command):
+        memory_result = self.tool_manager.execute("MemoryEngine", "is_memory_command", command)
+        if memory_result.get("success") and memory_result.get("result"):
             return "knowledge"
 
         category = self.intent_engine.classify(command)
@@ -171,3 +186,17 @@ class TaskExecutor:
 
     def _is_vision_request(self, text):
         return any(phrase in text for phrase in ("what do you see", "look at my screen", "read screen", "analyze screen", "screen"))
+
+    def _extract_active_context(self, plan: dict[str, Any]) -> None:
+        if not isinstance(plan, dict):
+            return
+
+        for step in plan.get("steps", []):
+            action = step.get("action", "").lower()
+            target = step.get("target")
+            if action == "launch application" and isinstance(target, str):
+                self.tool_manager.execute("ContextEngine", "set_active_application", target)
+            if action == "open website":
+                self.tool_manager.execute("ContextEngine", "set_active_application", "browser")
+            if "document" in action or "summarize" in action:
+                self.tool_manager.execute("ContextEngine", "set_active_document", target or "document")

@@ -33,13 +33,21 @@ class Memory:
             {
                 "time": str(datetime.now()),
                 "user": user,
-                "EchoDesk": response
+                "EchoDesk": response,
             }
         )
 
 
         with open(self.file, "w") as file:
             json.dump(data, file, indent=4)
+
+        try:
+            from context.context import get_context_engine
+
+            context_engine = get_context_engine()
+            context_engine.add_assistant_message(response)
+        except Exception:
+            pass
 
 
 
