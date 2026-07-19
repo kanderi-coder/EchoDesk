@@ -1,0 +1,74 @@
+{
+    "history": [
+        {
+            "time": "2026-07-18 18:37:52.296055",
+            "user": "hello",
+            "EchoDesk": "Hello! I am EchoDesk. How can I help you?"
+        },
+        {
+            "time": "2026-07-18 18:38:00.921869",
+            "user": "what time is it",
+            "EchoDesk": "The current time is 18:38:00"
+        },
+        {
+            "time": "2026-07-18 18:38:10.022851",
+            "user": "history",
+            "EchoDesk": "Hello! I am EchoDesk. How can I help you?"
+        },
+        {
+            "time": "2026-07-18 18:40:15.963466",
+            "user": "hello",
+            "EchoDesk": "Hello! I am EchoDesk. How can I help you?"
+        },
+        {
+            "time": "2026-07-18 18:40:27.045702",
+            "user": "history",
+            "EchoDesk": "I remember 4 conversations."
+        },
+        {
+            "time": "2026-07-18 18:59:16.636860",
+            "user": "hello",
+            "EchoDesk": "Hello! I am EchoDesk. How can I help you?"
+        },
+        {
+            "time": "2026-07-18 18:59:48.564101",
+            "user": "hello ok google",
+            "EchoDesk": "I am still learning that command."
+        },
+        {
+            "time": "2026-07-18 19:00:25.106367",
+            "user": "hello",
+            "EchoDesk": "Hello! I am EchoDesk. How can I help you?"
+        },
+        {
+            "time": "2026-07-18 19:01:44.736919",
+            "user": "happy birthday",
+            "EchoDesk": "I am still learning that command."
+        },
+        {
+            "time": "2026-07-18 19:03:53.494176",
+            "user": "new york",
+            "EchoDesk": "I am still learning that command."
+        },
+        {
+            "time": "2026-07-18 19:06:07.844730",
+            "user": "man u new phone again",
+            "EchoDesk": "I am still learning that command."
+        },
+        {
+            "time": "2026-07-18 19:06:48.069898",
+            "user": "divya monster",
+            "EchoDesk": "I am still learning that command."
+        },
+        {
+            "time": "2026-07-18 19:09:17.032850",
+            "user": "good boy",
+            "EchoDesk": "I am still learning that command."
+        },
+        {
+            "time": "2026-07-18 20:16:02.943325",
+            "user": "lewdest records",
+            "EchoDesk": "I am still learning that command."
+        }
+    ]
+}
