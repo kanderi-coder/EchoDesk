@@ -111,6 +111,8 @@ class ToolManager:
             automation_module = importlib.import_module("automation.automation")
             desktop_module = importlib.import_module("desktop.controller")
             context_module = importlib.import_module("context.context")
+            agent_module = importlib.import_module("agent.agent")
+            workflow_module = importlib.import_module("workflow.workflow")
 
             self.register_tool("MemoryEngine", memory_module.MemoryEngine())
             self.register_tool("KnowledgeEngine", knowledge_module.KnowledgeEngine())
@@ -120,6 +122,8 @@ class ToolManager:
             self.register_tool("PlannerEngine", planner_module.PlannerEngine(automation_tool))
             self.register_tool("DesktopController", desktop_module.DesktopController())
             self.register_tool("ContextEngine", context_module.get_context_engine())
+            self.register_tool("WorkflowEngine", workflow_module.WorkflowEngine(self))
+            self.register_tool("AgentEngine", agent_module.AgentEngine(self))
             self.register_tool("Vision", VisionTool())
 
             return self._success("register_default_tools", "Default tools registered.")
