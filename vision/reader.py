@@ -5,18 +5,18 @@ class ScreenReader:
     def __init__(self):
         try:
             import easyocr
-        except ImportError as exc:
-            raise RuntimeError(
-                "EasyOCR is required for screen reading. Install the dependency or disable vision features."
-            ) from exc
-
-        print("Loading EasyOCR... (first launch may take a minute)")
-        self.reader = easyocr.Reader(['en'], gpu=False)
+            print("Loading EasyOCR... (first launch may take a minute)")
+            self.reader = easyocr.Reader(['en'], gpu=False)
+        except ImportError:
+            self.reader = None
 
     def read_image(self, image_path):
         """
         Reads all text from an image and returns it as a single string.
         """
+
+        if self.reader is None:
+            return "Screen reading is not available because EasyOCR is not installed."
 
         if not os.path.exists(image_path):
             return "Image not found."

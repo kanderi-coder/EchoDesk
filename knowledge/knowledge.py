@@ -1,5 +1,8 @@
+from typing import Any
+
 from internet.internet import InternetEngine
 from planner.planner import PlannerEngine
+from tools.manager import ToolManager
 
 from memory_engine.memory_engine import MemoryEngine
 
@@ -30,6 +33,32 @@ class KnowledgeEngine:
         self.planner_engine = PlannerEngine()
         self.internet_engine = InternetEngine()
 
+    def _agent_engine(self):
+        try:
+            tool_manager = ToolManager()
+            registration_result = tool_manager.register_default_tools()
+            if not registration_result.get("success"):
+                return None
+            return tool_manager.get_tool("AgentEngine")
+        except Exception:
+            return None
+
+    def _format_agent_response(self, response: dict[str, Any]) -> str:
+        if not isinstance(response, dict):
+            return str(response)
+
+        message = response.get("message", "Agent execution completed.")
+        result = response.get("result")
+        if isinstance(result, dict):
+            summary = result.get("result")
+            if isinstance(summary, dict):
+                plan_summary = summary.get("goal")
+                status = summary.get("status")
+                return f"{message} Goal: {plan_summary}. Status: {status}."
+            if summary is not None:
+                return f"{message} {summary}"
+        return message
+
     def search(self, question):
 
         question = question.lower().strip()
@@ -47,6 +76,14 @@ class KnowledgeEngine:
 
         plan = self.planner_engine.plan(question)
         if plan is not None:
+            agent = self._agent_engine()
+            if agent is not None:
+                try:
+                    executor_response = agent.execute_goal(question)
+                    if executor_response.get("success"):
+                        return self._format_agent_response(executor_response)
+                except Exception:
+                    pass
             return self.planner_engine.describe_plan(plan)
 
         local_answer = self.facts.get(question)

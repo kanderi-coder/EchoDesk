@@ -133,6 +133,7 @@ class TaskExecutor:
         self.intent_engine = intent_engine or IntentEngine()
         self.tool_manager = ToolManager()
         self.tool_manager.register_default_tools()
+        self.agent_engine = self.tool_manager.get_tool("AgentEngine")
 
     def execute(self, command):
         normalized = command.lower().strip() if command else ""

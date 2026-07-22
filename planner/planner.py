@@ -5,8 +5,8 @@ from typing import Any
 class PlannerEngine:
     """A reusable planner engine for EchoDesk.
 
-    PlannerEngine converts user requests into ordered execution plans
-    represented as structured steps. It does not execute any actions.
+    PlannerEngine accepts a user goal and converts it into an ordered,
+    structured execution plan. It never executes actions itself.
     """
 
     def __init__(self, automation_engine: Any | None = None):
@@ -18,15 +18,15 @@ class PlannerEngine:
         """
         self.automation_engine = automation_engine
 
-    def plan(self, command: str) -> list[dict[str, str]] | None:
-        """Translate a natural language command into an execution plan.
+    def plan(self, command: str) -> dict[str, Any] | None:
+        """Translate a user goal into a structured execution plan.
 
         Args:
             command: The user request.
 
         Returns:
-            A list of ordered structured steps or None when the command is not
-            suitable for planning.
+            A structured plan dictionary or None when the request cannot be
+            planned.
         """
         if not isinstance(command, str):
             return None
@@ -40,6 +40,10 @@ class PlannerEngine:
             self._plan_open_application,
             self._plan_open_website,
             self._plan_read_screen,
+            self._plan_organize_downloads,
+            self._plan_organize_desktop,
+            self._plan_summarize_document,
+            self._plan_create_folder,
             self._plan_time_query,
             self._plan_wait,
             self._plan_move_mouse,
@@ -51,26 +55,31 @@ class PlannerEngine:
         ]
 
         for routine in routines:
-            plan = routine(text)
-            if plan is not None:
-                return plan
+            steps = routine(text)
+            if steps is not None:
+                return self._build_plan(command, steps)
 
         return None
 
-    def describe_plan(self, plan: list[dict[str, str]]) -> str:
+    def describe_plan(self, plan: dict[str, Any]) -> str:
         """Return a human-readable description of a plan.
 
         Args:
             plan: The structured execution plan.
 
         Returns:
-            A numbered summary of the plan steps.
+            A summary of plan details and ordered steps.
         """
         if not plan:
             return "I could not generate a plan for that request."
 
-        lines = []
-        for index, step in enumerate(plan, start=1):
+        lines = [f"Goal: {plan['goal']}", f"Reasoning: {plan['reasoning']}"]
+        lines.append(f"Estimated complexity: {plan['estimated_complexity']}")
+        lines.append(f"Required tools: {', '.join(plan['required_tools']) or 'none'}")
+        lines.append(f"Expected result: {plan['expected_result']}" )
+        lines.append("Steps:")
+
+        for index, step in enumerate(plan["steps"], start=1):
             description = step.get("description") or self._format_step(step)
             lines.append(f"{index}. {description}")
 
@@ -79,6 +88,68 @@ class PlannerEngine:
     def is_planning_command(self, command: str) -> bool:
         """Determine whether the command is suitable for planning."""
         return self.plan(command) is not None
+
+    def _build_plan(self, command: str, steps: list[dict[str, str]]) -> dict[str, Any]:
+        goal = command.strip()
+        reasoning = self._infer_reasoning(command, steps)
+        complexity = self._estimate_complexity(steps)
+        tools = self._infer_tools(steps)
+        expected_result = self._infer_expected_result(command, steps)
+        return {
+            "goal": goal,
+            "reasoning": reasoning,
+            "steps": steps,
+            "estimated_complexity": complexity,
+            "required_tools": tools,
+            "expected_result": expected_result,
+        }
+
+    def _infer_reasoning(self, command: str, steps: list[dict[str, str]]) -> str:
+        return f"Break the goal into the necessary actions to satisfy: {command.strip()}."
+
+    def _estimate_complexity(self, steps: list[dict[str, str]]) -> str:
+        if len(steps) <= 2:
+            return "easy"
+        if len(steps) <= 4:
+            return "medium"
+        return "hard"
+
+    def _infer_tools(self, steps: list[dict[str, str]]) -> list[str]:
+        tools = set()
+        for step in steps:
+            action = step.get("action", "").lower()
+            if "application" in action or "launch" in action:
+                tools.add("automation")
+            if "website" in action or "browser" in action:
+                tools.add("browser")
+            if "screen" in action or "image" in action:
+                tools.add("vision")
+            if "document" in action or "summarize" in action:
+                tools.add("document")
+            if "folder" in action or "create" in action:
+                tools.add("file system")
+            if "wait" in action:
+                tools.add("timer")
+            if "mouse" in action or "click" in action or "scroll" in action:
+                tools.add("input")
+            if "type" in action or "press" in action or "hotkey" in action:
+                tools.add("keyboard")
+        return sorted(tools)
+
+    def _infer_expected_result(self, command: str, steps: list[dict[str, str]]) -> str:
+        if "open" in command.lower() and "search" in command.lower():
+            return "The application opens and performs the search."
+        if "read" in command.lower() and "screen" in command.lower():
+            return "A summary of the screen contents is provided."
+        if "time" in command.lower():
+            return "The current system time is returned."
+        if "summarize" in command.lower():
+            return "A short summary of the requested content is returned."
+        if "organize" in command.lower():
+            return "Files or desktop items are arranged neatly."
+        if "create a folder" in command.lower() or "create folder" in command.lower():
+            return "A new folder is created with the requested name."
+        return "The requested task is planned and ready for execution."
 
     def _plan_open_app_and_search(self, text: str) -> list[dict[str, str]] | None:
         match = re.match(
@@ -92,11 +163,11 @@ class PlannerEngine:
         query = match.group("query").strip()
 
         return [
-            self._step("Launch application", app, f"Launch application: {app}"),
+            self._step("Launch application", app, f"Launch application: {app}."),
             self._step("Wait", "application", "Wait until the application opens."),
-            self._step("Focus search bar", "search", "Focus the search bar."),
+            self._step("Focus search bar", "search field", "Bring the search bar into focus."),
             self._step("Type text", query, f"Type \"{query}\"."),
-            self._step("Press key", "Enter", "Press Enter."),
+            self._step("Press key", "Enter", "Press Enter to execute the search."),
         ]
 
     def _plan_open_application(self, text: str) -> list[dict[str, str]] | None:
@@ -106,7 +177,7 @@ class PlannerEngine:
 
         app = self._normalize_application(match.group("app"))
         return [
-            self._step("Launch application", app, f"Launch application: {app}"),
+            self._step("Launch application", app, f"Launch application: {app}."),
             self._step("Wait", "application", "Wait until the application opens."),
         ]
 
@@ -123,7 +194,7 @@ class PlannerEngine:
             url = f"https://{url}"
 
         return [
-            self._step("Open website", url, f"Open website: {url}"),
+            self._step("Open website", url, f"Open website: {url}."),
             self._step("Wait", "browser", "Wait until the browser opens the website."),
         ]
 
@@ -141,6 +212,48 @@ class PlannerEngine:
                 self._step("Return summary", "summary", "Return a concise summary of the screen contents."),
             ]
         return None
+
+    def _plan_organize_downloads(self, text: str) -> list[dict[str, str]] | None:
+        if "organize" in text and "download" in text:
+            return [
+                self._step("Open folder", "Downloads", "Open the Downloads folder."),
+                self._step("Sort files", "Downloads", "Sort downloaded files by type or date."),
+                self._step("Move files", "organized folders", "Move files into appropriate folders."),
+                self._step("Review result", "folder layout", "Review the organized Downloads folder."),
+            ]
+        return None
+
+    def _plan_organize_desktop(self, text: str) -> list[dict[str, str]] | None:
+        if "organize" in text and "desktop" in text:
+            return [
+                self._step("Scan desktop", "Desktop", "Scan desktop icons and files."),
+                self._step("Group items", "Desktop", "Group similar items together."),
+                self._step("Create folders", "Desktop folders", "Create folders for organization."),
+                self._step("Move items", "folders", "Move items into the appropriate folders."),
+                self._step("Review", "Desktop layout", "Review the organized desktop."),
+            ]
+        return None
+
+    def _plan_summarize_document(self, text: str) -> list[dict[str, str]] | None:
+        if "summarize" in text and "document" in text:
+            return [
+                self._step("Locate document", "document", "Locate the document to summarize."),
+                self._step("Read document", "document", "Read the document contents."),
+                self._step("Extract key points", "document", "Identify the most important points."),
+                self._step("Write summary", "summary", "Write a concise summary."),
+            ]
+        return None
+
+    def _plan_create_folder(self, text: str) -> list[dict[str, str]] | None:
+        match = re.match(r"^(?:create|make)\s+(?:a\s+)?folder\s+(?:called\s+)?(?P<name>.+)$", text)
+        if not match:
+            return None
+
+        folder_name = match.group("name").strip().title()
+        return [
+            self._step("Create folder", folder_name, f"Create a folder called {folder_name}."),
+            self._step("Verify folder", folder_name, "Verify that the folder has been created."),
+        ]
 
     def _plan_time_query(self, text: str) -> list[dict[str, str]] | None:
         if text in (
