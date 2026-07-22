@@ -321,3 +321,181 @@ class AgentEngine:
         if details is not None:
             response["details"] = details
         return response
+
+
+class Agent:
+    """Rule-based agent that selects the best subsystem for a user request."""
+
+    def decide(self, context: "AgentContext", plan: Any | None = None) -> "Decision":
+        from .context import AgentContext
+        from .decision import Decision
+
+        normalized = context.user_command.lower().strip()
+        scores = {
+            "KnowledgeEngine": 0,
+            "InternetEngine": 0,
+            "Vision": 0,
+            "MemoryEngine": 0,
+            "PlannerEngine": 0,
+            "AutomationEngine": 0,
+            "DesktopController": 0,
+            "Voice": 0,
+            "LLM": 0,
+        }
+
+        if context.knowledge_available:
+            scores["KnowledgeEngine"] += 20
+        if context.internet_available:
+            scores["InternetEngine"] += 20
+        if context.memory_available:
+            scores["MemoryEngine"] += 20
+        if context.vision_available:
+            scores["Vision"] += 20
+        if context.automation_available:
+            scores["AutomationEngine"] += 10
+
+        if context.intent == "question":
+            scores["KnowledgeEngine"] += 40
+            scores["InternetEngine"] += 30
+            scores["LLM"] += 30
+        elif context.intent == "internet":
+            scores["InternetEngine"] += 50
+            scores["KnowledgeEngine"] += 20
+        elif context.intent == "memory":
+            scores["MemoryEngine"] += 60
+            scores["KnowledgeEngine"] += 10
+        elif context.intent == "vision":
+            scores["Vision"] += 80
+        elif context.intent == "unknown":
+            scores["KnowledgeEngine"] += 10
+            scores["LLM"] += 20
+
+        plan_steps = self._plan_step_count(plan)
+        if plan_steps > 1:
+            scores["PlannerEngine"] += 50
+            scores["LLM"] += 20
+        elif plan_steps == 1:
+            scores["LLM"] += 10
+
+        if any(keyword in normalized for keyword in ("remember", "forget", "delete", "update", "set", "what is my", "what are my")):
+            scores["MemoryEngine"] += 40
+        if any(keyword in normalized for keyword in ("open", "launch", "start", "run", "close", "browser", "website", "url")):
+            scores["DesktopController"] += 50
+            scores["AutomationEngine"] += 20
+        if any(keyword in normalized for keyword in ("search", "google", "wikipedia", "find", "lookup")):
+            scores["InternetEngine"] += 50
+        if any(keyword in normalized for keyword in ("screen", "see", "read", "analyze", "capture", "what do you see")):
+            scores["Vision"] += 60
+        if any(keyword in normalized for keyword in ("error", "issue", "fix", "bug", "exception", "traceback")):
+            scores["Vision"] += 30
+            scores["InternetEngine"] += 20
+            scores["LLM"] += 30
+        if any(keyword in normalized for keyword in ("plan", "schedule", "automate", "workflow", "task", "step")):
+            scores["PlannerEngine"] += 40
+            scores["AutomationEngine"] += 30
+            scores["KnowledgeEngine"] += 10
+
+        if not context.internet_available:
+            scores["InternetEngine"] = 0
+            scores["LLM"] = max(scores["LLM"] - 20, 0)
+        if not context.vision_available:
+            scores["Vision"] = 0
+        if not context.memory_available:
+            scores["MemoryEngine"] = 0
+        if not context.automation_available:
+            scores["AutomationEngine"] = 0
+
+        selected_tool, selected_score = max(scores.items(), key=lambda item: item[1])
+
+        if plan_steps > 1:
+            selected_tool = "PlannerEngine"
+        elif plan_steps == 1 and selected_tool == "PlannerEngine":
+            selected_tool = self._resolve_single_step_tool(plan)
+
+        if selected_score <= 0:
+            if context.knowledge_available:
+                selected_tool = "KnowledgeEngine"
+            elif context.internet_available:
+                selected_tool = "InternetEngine"
+            else:
+                selected_tool = "Voice"
+            selected_score = 10
+
+        requires_screen = selected_tool == "Vision"
+        requires_memory = selected_tool == "MemoryEngine"
+        requires_internet = selected_tool == "InternetEngine"
+        requires_llm = selected_tool == "LLM"
+        requires_confirmation = selected_score < 40
+        priority = selected_score
+
+        reason = self._build_reason(selected_tool, selected_score, context)
+
+        return Decision(
+            selected_tool=selected_tool,
+            reason=reason,
+            requires_screen=requires_screen,
+            requires_memory=requires_memory,
+            requires_internet=requires_internet,
+            requires_llm=requires_llm,
+            requires_confirmation=requires_confirmation,
+            priority=priority,
+        )
+
+    def _plan_step_count(self, plan: Any | None) -> int:
+        if plan is None:
+            return 0
+        steps = getattr(plan, "steps", None)
+        if steps is None and isinstance(plan, dict):
+            steps = plan.get("steps")
+        if not isinstance(steps, list):
+            return 0
+        return len(steps)
+
+    def _resolve_single_step_tool(self, plan: Any | None) -> str:
+        if plan is None:
+            return "KnowledgeEngine"
+
+        step = None
+        steps = getattr(plan, "steps", None)
+        if isinstance(steps, list) and steps:
+            step = steps[0]
+        elif isinstance(plan, dict):
+            step_list = plan.get("steps")
+            if isinstance(step_list, list) and step_list:
+                step = step_list[0]
+
+        if step is None:
+            return "KnowledgeEngine"
+
+        action = getattr(step, "action", None)
+        if action is None and isinstance(step, dict):
+            action = step.get("action", "")
+        action_lower = str(action).lower()
+        if any(keyword in action_lower for keyword in ("launch", "open", "start")):
+            return "DesktopController"
+        if any(keyword in action_lower for keyword in ("search", "open website", "visit")):
+            return "InternetEngine"
+        if any(keyword in action_lower for keyword in ("capture", "analyze", "screen")):
+            return "Vision"
+        if any(keyword in action_lower for keyword in ("type", "press", "hotkey", "move mouse", "click", "scroll")):
+            return "AutomationEngine"
+        return "PlannerEngine"
+
+    def _build_reason(self, selected_tool: str, score: int, context: "AgentContext") -> str:
+        if selected_tool == "Vision":
+            return "The command looks like a screen or vision request, and vision capabilities are available."
+        if selected_tool == "MemoryEngine":
+            return "The command appears to be memory-related, so memory intelligence is the best fit."
+        if selected_tool == "InternetEngine":
+            return "The command is best answered by the internet search subsystem."
+        if selected_tool == "KnowledgeEngine":
+            return "Local knowledge is available and fits the user's question."
+        if selected_tool == "PlannerEngine":
+            return "The command suggests planning or automation, so planning is the best route."
+        if selected_tool == "AutomationEngine":
+            return "The command appears actionable and can be handled by automation."
+        if selected_tool == "DesktopController":
+            return "The command resembles a desktop action such as launching or opening an app."
+        if selected_tool == "LLM":
+            return "Use the reasoning engine when no other subsystem is clearly dominant."
+        return "Selected a safe default subsystem based on available capabilities."

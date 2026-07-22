@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import List, Optional, Protocol
 from urllib.error import HTTPError, URLError
 
+from llm.engine import LLMEngine
+
 
 @dataclass
 class SearchResult:
@@ -129,13 +131,19 @@ class InternetEngine:
     """A reusable internet search engine with provider abstraction."""
 
     FALLBACK_MESSAGE = (
-        "I couldn't find a clear answer from the internet right now. "
-        "Please try again later or ask something else."
+       "I couldn't find a clear answer from the internet right now. "
+       "Please try again later or ask something else."
     )
 
-    def __init__(self, providers: Optional[List[SearchProvider]] = None, timeout: float = 5.0) -> None:
-        self.timeout = float(timeout)
-        self.providers = providers if providers is not None else [DuckDuckGoProvider()]
+    def __init__(
+       self,
+       providers: Optional[List[SearchProvider]] = None,
+       timeout: float = 5.0,
+       llm_engine: Optional[LLMEngine] = None,
+    ) -> None:
+       self.timeout = float(timeout)
+       self.providers = providers if providers is not None else [DuckDuckGoProvider()]
+       self.llm_engine = llm_engine
 
     def search(self, query: str) -> str:
         if not isinstance(query, str) or not query.strip():
@@ -150,7 +158,7 @@ class InternetEngine:
                 continue
 
             if result.success and result.summary:
-                return result.summary
+                return self._summarize_with_llm(result.summary)
 
             last_error = result.error or last_error
 
@@ -158,3 +166,27 @@ class InternetEngine:
             return f"{self.FALLBACK_MESSAGE} {last_error}"
 
         return self.FALLBACK_MESSAGE
+
+    def _summarize_with_llm(self, text: str) -> str:
+        if self.llm_engine is None:
+            return text
+
+        try:
+            summary = self.llm_engine.summarize(text)
+            if not isinstance(summary, str) or not summary.strip():
+                return text
+
+            if self._looks_like_llm_error(summary):
+                return text
+
+            return summary
+        except Exception:
+            return text
+
+    def _looks_like_llm_error(self, response: str) -> bool:
+        lowered = response.lower()
+        return (
+            response.startswith("OllamaProvider")
+            or "ollama" in lowered and "error" in lowered
+            or "could not" in lowered and "ollama" in lowered
+        )

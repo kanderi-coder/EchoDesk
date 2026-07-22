@@ -3,7 +3,14 @@ import datetime
 import os
 import subprocess
 import webbrowser
-from typing import Any
+from typing import Any, Optional
+
+from .clipboard import ClipboardManager
+from .launcher import ApplicationLauncher
+from .keyboard import KeyboardController
+from .mouse import MouseController
+from .window import WindowManager
+from .workflow import DesktopWorkflow
 
 try:
     import pyautogui
@@ -21,159 +28,181 @@ class DesktopController:
 
     VALID_BUTTONS = {"left", "right", "middle"}
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        launcher: Optional[ApplicationLauncher] = None,
+        mouse_controller: Optional[MouseController] = None,
+        keyboard_controller: Optional[KeyboardController] = None,
+        window_manager: Optional[WindowManager] = None,
+        clipboard_manager: Optional[ClipboardManager] = None,
+        workflow: Optional[DesktopWorkflow] = None,
+    ) -> None:
         """Initialize the desktop controller."""
         self.pyautogui = pyautogui
         self.ctypes = ctypes if hasattr(ctypes, "windll") else None
+        self.launcher = launcher or ApplicationLauncher()
+        self.mouse = mouse_controller or MouseController()
+        self.keyboard = keyboard_controller or KeyboardController()
+        self.window_manager = window_manager or WindowManager()
+        self.clipboard = clipboard_manager or ClipboardManager()
+        self.workflow = workflow or DesktopWorkflow(self)
 
     def move_mouse(self, x: int, y: int) -> dict[str, Any]:
         """Move the mouse cursor to the specified screen coordinates."""
-        try:
-            x_coord = int(x)
-            y_coord = int(y)
-        except (TypeError, ValueError):
-            return self._error("Invalid mouse coordinates.")
+        return self.mouse.move(x, y)
 
-        if self.pyautogui:
-            try:
-                self.pyautogui.moveTo(x_coord, y_coord)
-                return self._success("move_mouse", f"Moved mouse to ({x_coord}, {y_coord}).")
-            except Exception as exc:
-                return self._error("Failed to move the mouse.", details=str(exc))
+    def click_mouse(self, button: str = "left") -> dict[str, Any]:
+        """Perform a mouse click with the specified button."""
+        return self.mouse.click(button)
 
-        if self.ctypes:
-            try:
-                self.ctypes.windll.user32.SetCursorPos(x_coord, y_coord)
-                return self._success("move_mouse", f"Moved mouse to ({x_coord}, {y_coord}).")
-            except Exception as exc:
-                return self._error("Failed to move the mouse.", details=str(exc))
+    def double_click_mouse(self, button: str = "left") -> dict[str, Any]:
+        """Perform a double click with the specified button."""
+        return self.mouse.double_click(button)
 
-        return self._error("Mouse movement is not supported in this environment.")
+    def drag_mouse(self, start_x: int, start_y: int, end_x: int, end_y: int, duration: float = 1.0) -> dict[str, Any]:
+        """Drag the mouse from one coordinate to another."""
+        return self.mouse.drag(start_x, start_y, end_x, end_y, duration)
+
+    def scroll_mouse(self, amount: int) -> dict[str, Any]:
+        """Scroll the mouse wheel by a given amount."""
+        return self.mouse.scroll(amount)
+
+    def mouse_position(self) -> dict[str, Any]:
+        """Get the current mouse cursor position."""
+        return self.mouse.position()
 
     def left_click(self) -> dict[str, Any]:
         """Perform a left mouse click."""
-        return self._click("left")
+        return self.mouse.click("left")
 
     def right_click(self) -> dict[str, Any]:
         """Perform a right mouse click."""
-        return self._click("right")
+        return self.mouse.click("right")
 
     def middle_click(self) -> dict[str, Any]:
         """Perform a middle mouse click."""
-        return self._click("middle")
+        return self.mouse.click("middle")
 
     def double_click(self) -> dict[str, Any]:
         """Perform a double mouse click."""
-        if self.pyautogui:
-            try:
-                self.pyautogui.doubleClick()
-                return self._success("double_click", "Performed a double click.")
-            except Exception as exc:
-                return self._error("Failed to perform a double click.", details=str(exc))
-
-        if self.ctypes:
-            first = self._click("left")
-            if not first.get("success"):
-                return first
-            second = self._click("left")
-            if not second.get("success"):
-                return second
-            return self._success("double_click", "Performed a double click.")
-
-        return self._error("Double click is not supported in this environment.")
+        return self.mouse.double_click("left")
 
     def scroll(self, amount: int) -> dict[str, Any]:
         """Scroll the mouse wheel by a given amount."""
-        try:
-            scroll_amount = int(amount)
-        except (TypeError, ValueError):
-            return self._error("Invalid scroll amount.")
-
-        if self.pyautogui:
-            try:
-                self.pyautogui.scroll(scroll_amount)
-                return self._success("scroll", f"Scrolled by {scroll_amount} units.")
-            except Exception as exc:
-                return self._error("Failed to scroll.", details=str(exc))
-
-        if self.ctypes:
-            try:
-                self.ctypes.windll.user32.mouse_event(0x0800, 0, 0, scroll_amount * 120, 0)
-                return self._success("scroll", f"Scrolled by {scroll_amount} units.")
-            except Exception as exc:
-                return self._error("Failed to scroll.", details=str(exc))
-
-        return self._error("Scrolling is not supported in this environment.")
+        return self.mouse.scroll(amount)
 
     def type_text(self, text: str) -> dict[str, Any]:
         """Type text using the keyboard."""
-        if not isinstance(text, str) or not text.strip():
-            return self._error("No text was provided to type.")
-
-        if self.pyautogui:
-            try:
-                self.pyautogui.write(text, interval=0.01)
-                return self._success("type_text", f"Typed text: {text}.")
-            except Exception as exc:
-                return self._error("Failed to type text.", details=str(exc))
-
-        return self._error("Typing text is not supported in this environment.")
+        return self.keyboard.type_text(text)
 
     def press_key(self, key: str) -> dict[str, Any]:
         """Press a single keyboard key."""
-        if not isinstance(key, str) or not key.strip():
-            return self._error("No key was specified.")
-
-        normalized = key.strip().lower()
-        if self.pyautogui:
-            try:
-                self.pyautogui.press(normalized)
-                return self._success("press_key", f"Pressed key: {normalized}.")
-            except Exception as exc:
-                return self._error("Failed to press the key.", details=str(exc))
-
-        return self._error("Key press is not supported in this environment.")
+        return self.keyboard.press_key(key)
 
     def hotkey(self, *keys: str) -> dict[str, Any]:
         """Press a key combination as a hotkey."""
-        if not keys or not all(isinstance(key, str) and key.strip() for key in keys):
-            return self._error("A hotkey requires at least two valid keys.")
+        return self.keyboard.hotkey(*keys)
 
-        combination = [key.strip().lower() for key in keys]
-        if len(combination) < 2:
-            return self._error("A hotkey requires at least two keys.")
+    def copy_text(self) -> dict[str, Any]:
+        """Copy the current selection to the clipboard."""
+        return self.keyboard.copy()
 
-        if self.pyautogui:
-            try:
-                self.pyautogui.hotkey(*combination)
-                return self._success("hotkey", f"Pressed hotkey: {'+'.join(combination)}.")
-            except Exception as exc:
-                return self._error("Failed to press the hotkey.", details=str(exc))
+    def paste_text(self) -> dict[str, Any]:
+        """Paste from the clipboard."""
+        return self.keyboard.paste()
 
-        return self._error("Hotkeys are not supported in this environment.")
+    def undo(self) -> dict[str, Any]:
+        """Undo the last action."""
+        return self.keyboard.undo()
+
+    def redo(self) -> dict[str, Any]:
+        """Redo the last undone action."""
+        return self.keyboard.redo()
 
     def open_application(self, name: str) -> dict[str, Any]:
-        """Open an application or command using the desktop environment."""
-        if not isinstance(name, str) or not name.strip():
-            return self._error("No application name was provided.")
+        """Open an application using the launcher subsystem."""
+        return self.launcher.launch(name)
 
-        application = name.strip()
+    def supported_applications(self) -> dict[str, Any]:
+        """Return the supported desktop applications."""
+        return self._success(
+            "supported_applications",
+            "Supported applications retrieved.",
+            result=self.launcher.list_supported(),
+        )
 
-        try:
-            if os.name == "nt":
-                if os.path.exists(application):
-                    os.startfile(application)
-                else:
-                    subprocess.Popen(application, shell=True)
-            else:
-                if os.path.exists(application):
-                    subprocess.Popen([application])
-                else:
-                    subprocess.Popen(application, shell=True)
-        except Exception as exc:
-            return self._error("Failed to open the application.", details=str(exc))
+    def active_window(self) -> dict[str, Any]:
+        """Return structured information about the currently active window."""
+        return self.window_manager.active_window()
 
-        return self._success("open_application", f"Opened application or command: {application}.")
+    def list_windows(self) -> dict[str, Any]:
+        """Return a list of available window titles."""
+        return self.window_manager.list_windows()
+
+    def focus_window(self, title: str) -> dict[str, Any]:
+        """Bring a window with the given title to the foreground."""
+        return self.window_manager.focus_window(title)
+
+    def minimize_window(self, title: str) -> dict[str, Any]:
+        """Minimize a visible window by title."""
+        return self.window_manager.minimize_window(title)
+
+    def maximize_window(self, title: str) -> dict[str, Any]:
+        """Maximize a visible window by title."""
+        return self.window_manager.maximize_window(title)
+
+    def restore_window(self, title: str) -> dict[str, Any]:
+        """Restore a minimized or hidden window by title."""
+        return self.window_manager.restore_window(title)
+
+    def close_window(self, title: str, confirm: bool = False) -> dict[str, Any]:
+        """Close a window safely by title with explicit confirmation."""
+        return self.window_manager.close_window(title, confirm=confirm)
+
+    def switch_window(self, title: str) -> dict[str, Any]:
+        """Switch focus to another window by title."""
+        return self.window_manager.switch_window(title)
+
+    def get_clipboard(self) -> dict[str, Any]:
+        """Read the current clipboard contents."""
+        return self.clipboard.get_text()
+
+    def set_clipboard(self, text: str) -> dict[str, Any]:
+        """Write text to the clipboard."""
+        return self.clipboard.set_text(text)
+
+    def copy_clipboard(self) -> dict[str, Any]:
+        """Copy the current clipboard contents into the clipboard manager context."""
+        return self.clipboard.copy()
+
+    def paste_clipboard(self) -> dict[str, Any]:
+        """Return current clipboard content for paste operations."""
+        return self.clipboard.paste()
+
+    def clear_clipboard(self) -> dict[str, Any]:
+        """Clear the clipboard contents."""
+        return self.clipboard.clear()
+
+    def clipboard_available(self) -> dict[str, Any]:
+        """Check whether clipboard operations are available."""
+        return self.clipboard.available()
+
+    def execute_workflow(self, actions: list[dict[str, Any]]) -> dict[str, Any]:
+        """Execute a workflow composed of desktop actions."""
+        return self.workflow.execute(actions)
+
+    def available_workflow_actions(self) -> list[str]:
+        """Return the available desktop workflow actions."""
+        return self.workflow.available_actions()
+
+    def is_application_installed(self, name: str) -> dict[str, Any]:
+        """Return whether the requested application is installed."""
+        installed = self.launcher.is_installed(name)
+        return self._success(
+            "is_application_installed",
+            f"Application '{name}' is {'installed' if installed else 'not installed'}.",
+            result=installed,
+        )
 
     def open_website(self, url: str) -> dict[str, Any]:
         """Open a website in the default web browser."""

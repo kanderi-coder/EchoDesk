@@ -1,6 +1,5 @@
 from typing import Any
 
-from internet.internet import InternetEngine
 from planner.planner import PlannerEngine
 from tools.manager import ToolManager
 
@@ -31,7 +30,6 @@ class KnowledgeEngine:
 
         self.memory_engine = MemoryEngine()
         self.planner_engine = PlannerEngine()
-        self.internet_engine = InternetEngine()
 
     def _agent_engine(self):
         try:
@@ -90,7 +88,7 @@ class KnowledgeEngine:
         if local_answer is not None:
             return local_answer
 
-        return self.internet_engine.search(question)
+        return None
 
     def _search_context(self, question: str) -> str | None:
         normalized = question.strip().lower()

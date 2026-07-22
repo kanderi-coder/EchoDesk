@@ -124,6 +124,9 @@ class RuntimeEngine:
 
     def _execute_route(self, command: str, route: str) -> str:
         try:
+            if isinstance(route, dict) and route.get("route") == "execute_plan":
+                return self._execute_plan(route.get("plan"))
+
             if route == "greeting":
                 return "Hello! I am EchoDesk. How can I help you?"
 
@@ -153,13 +156,40 @@ class RuntimeEngine:
 
             if route == "knowledge":
                 knowledge_result = self.knowledge_engine.search(command)
-                if isinstance(knowledge_result, dict):
-                    return knowledge_result.get("message", str(knowledge_result))
-                return str(knowledge_result)
+                if knowledge_result is not None:
+                   if isinstance(knowledge_result, dict):
+                       return knowledge_result.get("message", str(knowledge_result))
+                   return str(knowledge_result)
+
+                internet_result = self.internet_engine.search(command)
+                return str(internet_result)
 
             return "I don't understand that request yet."
         except Exception as exc:
             return f"An error occurred while executing the request: {exc}"
+
+    def _execute_plan(self, plan: Any) -> str:
+       """Execute an ExecutionPlan using the shared ExecutionEngine."""
+       if plan is None:
+           return "No execution plan was provided."
+
+       execution_engine = self.tool_manager.get_tool("ExecutionEngine")
+       if execution_engine is None:
+           return "Execution engine is not available."
+
+       try:
+           result = execution_engine.execute_plan(plan)
+           if hasattr(result, "success") and result.success:
+               if result.output is not None:
+                   return str(result.output)
+               return "Execution completed successfully."
+
+           error_message = getattr(result, "error", None)
+           if error_message:
+               return f"Execution failed: {error_message}"
+           return "Execution failed due to an unknown error."
+       except Exception as exc:
+           return f"Execution failed with an exception: {type(exc).__name__}: {exc}"
 
     def _help_text(self) -> str:
         lines = ["EchoDesk Runtime commands:"]
@@ -223,6 +253,7 @@ class RuntimeEngine:
                     "KnowledgeEngine",
                     "InternetEngine",
                     "PlannerEngine",
+                    "ExecutionEngine",
                     "AgentEngine",
                     "WorkflowEngine",
                     "AutomationEngine",
