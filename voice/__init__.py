@@ -1,3 +1,4 @@
+from .assistant import VoiceAssistant
 from .controller import VoiceController
 from .speech_recognizer import SpeechRecognizer
 from .speech_synthesizer import SpeechSynthesizer

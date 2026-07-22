@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 
+from .assistant import VoiceAssistant
 from .speech_recognizer import SpeechRecognizer
 from .speech_synthesizer import SpeechSynthesizer
 
@@ -11,9 +12,14 @@ class VoiceController:
         self,
         recognizer: Optional[SpeechRecognizer] = None,
         synthesizer: Optional[SpeechSynthesizer] = None,
+        assistant: Optional[VoiceAssistant] = None,
     ) -> None:
         self.recognizer = recognizer or SpeechRecognizer()
         self.synthesizer = synthesizer or SpeechSynthesizer()
+        self.assistant = assistant or VoiceAssistant(
+            recognizer=self.recognizer,
+            synthesizer=self.synthesizer,
+        )
 
     def available(self) -> Dict[str, Any]:
         return self.recognizer.available()
@@ -46,3 +52,6 @@ class VoiceController:
 
     def stop_speech(self) -> Dict[str, Any]:
         return self.synthesizer.stop()
+
+    def run_voice_command(self) -> Dict[str, Any]:
+        return self.assistant.run_once()
